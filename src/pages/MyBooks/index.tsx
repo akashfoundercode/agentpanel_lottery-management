@@ -1,0 +1,220 @@
+import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
+import { MetricStrip, PageToolbar, Panel, StatusBadge } from '../PremiumPage';
+import api from '../../api/axios';
+
+interface Book {
+  id: number;
+  book_id: string;
+  agent_id: number;
+  total_tickets: number;
+  draw_date: string;
+  status: string;
+  assigned_at: string;
+  game: { game_name: string; ticket_price: string };
+  tickets: { ticket_number: string }[];
+}
+
+interface PaginatedResponse {
+  data: Book[];
+  current_page: number;
+  last_page: number;
+  total: number;
+}
+
+interface ConfirmState {
+  book: Book;
+  type: 'sold' | 'unsold';
+}
+
+function ConfirmModal({ confirm, onClose, onConfirm, loading }: {
+  confirm: ConfirmState;
+  onClose: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}) {
+  const isSold = confirm.type === 'sold';
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white shadow-2xl">
+        <div className={`flex items-center gap-3 rounded-t-xl px-5 py-4 ${isSold ? 'bg-emerald-50' : 'bg-orange-50'}`}>
+          {isSold
+            ? <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500" />
+            : <XCircle className="h-6 w-6 shrink-0 text-orange-500" />}
+          <p className={`text-sm font-black ${isSold ? 'text-emerald-700' : 'text-orange-700'}`}>
+            Mark as {isSold ? 'Sold' : 'Unsold'}
+          </p>
+        </div>
+
+        <div className="px-5 py-4">
+          <p className="text-sm text-slate-600">
+            Are you sure you want to mark book
+            <span className="mx-1 font-black text-slate-900">{confirm.book.book_id}</span>
+            as <span className={`font-black ${isSold ? 'text-emerald-600' : 'text-orange-600'}`}>{isSold ? 'Sold' : 'Unsold'}</span>?
+          </p>
+
+          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600 space-y-1">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Game</span>
+              <span className="font-bold text-slate-700">{confirm.book.game.game_name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Total Tickets</span>
+              <span className="font-bold text-slate-700">{confirm.book.total_tickets}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Ticket Price</span>
+              <span className="font-bold text-slate-700">₹{parseFloat(confirm.book.game.ticket_price).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Draw Date</span>
+              <span className="font-bold text-slate-700">{new Date(confirm.book.draw_date).toLocaleDateString('en-IN')}</span>
+            </div>
+          </div>
+
+          <p className="mt-3 text-[11px] text-slate-400">This action will be reported to the admin immediately.</p>
+        </div>
+
+        <div className="flex gap-2 border-t border-slate-100 px-5 py-3">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={`flex-1 rounded-lg py-2 text-xs font-black text-white disabled:opacity-50 ${isSold ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-orange-500 hover:bg-orange-600'}`}
+          >
+            {loading ? 'Please wait...' : `Yes, Mark as ${isSold ? 'Sold' : 'Unsold'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function MyBooks() {
+  const [books, setBooks] = useState<Book[]>([]);
+  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchBooks = () => {
+    api.get('/agent/books', { params: { page, search: search || undefined } }).then((res) => {
+      const d: PaginatedResponse = res.data.data;
+      setBooks(d.data);
+      setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
+    });
+  };
+
+  useEffect(() => { fetchBooks(); }, [page, search]);
+
+  const handleConfirm = async () => {
+    if (!confirm) return;
+    setLoading(true);
+    try {
+      await api.post(`/agent/books/${confirm.type}`, { book_id: confirm.book.id, agent_id: confirm.book.agent_id });
+      setConfirm(null);
+      fetchBooks();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalTickets = books.reduce((s, b) => s + (b.tickets?.length ?? b.total_tickets), 0);
+  const totalAmount = books.reduce((s, b) => s + b.total_tickets * parseFloat(b.game.ticket_price), 0);
+  const soldBooks = books.filter((b) => b.status === 'sold').length;
+  const assignedBooks = books.filter((b) => b.status === 'assigned').length;
+
+  return (
+    <>
+      {confirm && (
+        <ConfirmModal
+          confirm={confirm}
+          onClose={() => setConfirm(null)}
+          onConfirm={handleConfirm}
+          loading={loading}
+        />
+      )}
+
+      <PageToolbar
+        title="My Books"
+        subtitle="Assigned ticket books — mark each book as sold or unsold."
+        search="Search book number"
+        onSearch={setSearch}
+      />
+      <MetricStrip items={[
+        { label: 'Total Books', value: String(meta.total), tone: 'bg-blue-500' },
+        { label: 'Total Tickets', value: String(totalTickets), tone: 'bg-cyan-500' },
+        { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' },
+        { label: 'Assigned Books', value: String(assignedBooks), tone: 'bg-orange-500' },
+      ]} />
+      <Panel>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                {['Book ID', 'Game', 'Tickets', 'Ticket Price', 'Draw Date', 'Assigned At', 'Action'].map((col) => (
+                  <th key={col} className="px-3 py-2">{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {books.map((book) => (
+                <tr key={book.id} className="text-slate-700 hover:bg-blue-50/40">
+                  <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{book.total_tickets}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">₹{parseFloat(book.game.ticket_price).toLocaleString('en-IN')}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    {book.status === 'assigned' ? (
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setConfirm({ book, type: 'sold' })}
+                          className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600"
+                        >
+                          Sold
+                        </button>
+                        <button
+                          onClick={() => setConfirm({ book, type: 'unsold' })}
+                          className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600"
+                        >
+                          Unsold
+                        </button>
+                      </div>
+                    ) : (
+                      <StatusBadge value={book.status} />
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {books.length === 0 && (
+                <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {meta.last_page > 1 && (
+          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.current_page === 1}
+              className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs font-bold text-slate-600">{meta.current_page} / {meta.last_page}</span>
+            <button onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))} disabled={meta.current_page === meta.last_page}
+              className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </Panel>
+    </>
+  );
+}
