@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import api from '../../api/axios';
-import { MetricStrip, PageToolbar, Panel } from '../PremiumPage';
+import { MetricStrip, PageToolbar, Panel, PageLoader, ErrorBar } from '../PremiumPage';
 
 interface Book {
   id: number;
@@ -67,6 +67,7 @@ export default function Sales() {
         search="Search book or game"
         onSearch={setSearch}
       />
+      {error && <ErrorBar message={error} />}
       <MetricStrip
         items={[
           { label: 'Sold Books', value: String(soldBooks.length), tone: 'bg-emerald-500' },
@@ -75,12 +76,8 @@ export default function Sales() {
       />
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <Panel>
-          {loading ? (
-            <p className="p-6 text-slate-500">Loading...</p>
-          ) : error ? (
-            <p className="p-6 text-red-500">{error}</p>
-          ) : filtered.length === 0 ? (
-            <p className="p-6 text-slate-500">No sold books found.</p>
+          {loading ? <PageLoader /> : filtered.length === 0 ? (
+            <p className="p-6 text-center text-xs text-slate-400">No sold books found.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>

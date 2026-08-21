@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Gamepad2, BookOpen,
-  History, BarChart2, User, Settings, LogOut, Menu, Bell, ChevronDown, Calendar, Crown, X,
+  History, BarChart2, User, LogOut, Menu, Bell, ChevronDown, Calendar, Crown, X,
   BookMarked, Trophy, AlertCircle, Info, CheckCheck, Check
 } from 'lucide-react';
 import api from '../api/axios';
@@ -14,6 +14,7 @@ interface Notification {
   title: string;
   message: string;
   is_read: boolean;
+  
   time: string;
 }
 
@@ -167,7 +168,6 @@ const navigation = [
   { name: 'Assignment History', href: '/agent/assignment-history', icon: History },
   { name: 'Reports', href: '/agent/reports', icon: BarChart2 },
   { name: 'Profile', href: '/agent/profile', icon: User },
-  { name: 'Settings', href: '/agent/settings', icon: Settings },
 ];
 
 const pageTitle: Record<string, string> = {
@@ -183,7 +183,6 @@ const pageTitle: Record<string, string> = {
   'result-search': 'Result Search',
   reports: 'Reports',
   profile: 'Profile',
-  settings: 'Settings',
 };
 
 function SidebarContent({ collapsed, onClose }: { collapsed: boolean; onClose?: () => void }) {
@@ -271,6 +270,8 @@ function SidebarContent({ collapsed, onClose }: { collapsed: boolean; onClose?: 
 
 interface AgentProfile { agent_name: string; agent_id: string; profile_photo_url: string | null; }
 
+const AGENT_PHOTO_UPDATED_EVENT = 'agent-profile-photo-updated';
+
 export default function MainLayout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -279,6 +280,17 @@ export default function MainLayout() {
 
   useEffect(() => {
     api.get('/agent/profile').then((res) => setAgentProfile(res.data.data ?? res.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handlePhotoUpdate(event: Event) {
+      const photoUrl = (event as CustomEvent<{ profile_photo_url?: string }>).detail?.profile_photo_url;
+      if (!photoUrl) return;
+      setAgentProfile((profile) => profile ? { ...profile, profile_photo_url: photoUrl } : profile);
+    }
+
+    window.addEventListener(AGENT_PHOTO_UPDATED_EVENT, handlePhotoUpdate);
+    return () => window.removeEventListener(AGENT_PHOTO_UPDATED_EVENT, handlePhotoUpdate);
   }, []);
 
   const currentPage = location.pathname.split('/').pop() || '';

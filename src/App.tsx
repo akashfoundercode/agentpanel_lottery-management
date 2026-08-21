@@ -16,7 +16,6 @@ import ResultSearch from './pages/ResultSearch';
 import AssignmentHistory from './pages/AssignmentHistory';
 import Reports from './pages/Reports';
 import Profile from './pages/Profile';
-import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -40,7 +39,6 @@ function App() {
             <Route path="assignment-history" element={<AssignmentHistory />} />
             <Route path="reports" element={<Reports />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="settings" element={<Settings />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/agent/login" replace />} />

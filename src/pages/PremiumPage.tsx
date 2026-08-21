@@ -1,5 +1,23 @@
 import { ReactNode } from 'react';
-import { ArrowRight, Download, Filter, Search } from 'lucide-react';
+import { ArrowRight, Download, Filter, Search, Loader2, AlertCircle } from 'lucide-react';
+
+export function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+      <span className="ml-2.5 text-sm font-medium text-slate-400">Loading...</span>
+    </div>
+  );
+}
+
+export function ErrorBar({ message }: { message: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 px-4 py-2.5 text-xs font-medium text-red-600">
+      <AlertCircle size={14} className="shrink-0" />
+      {message}
+    </div>
+  );
+}
 
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (

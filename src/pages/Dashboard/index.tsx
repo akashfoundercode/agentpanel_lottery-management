@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
-  BookCopy, BookOpen, CheckCircle, ChevronDown,
-  Gamepad2, MoreVertical, Search, ShoppingCart, Ticket, Trophy, XCircle
+  BookCopy, CheckCircle, ChevronDown,
+  Gamepad2, ShoppingCart, Ticket, XCircle
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import {
-  Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
+  Area, AreaChart, CartesianGrid, ResponsiveContainer,
   Tooltip, XAxis, YAxis
 } from 'recharts';
-import { books, games, sales } from '../premiumData';
-import { DataTable, Panel, PanelHeader, StatusBadge } from '../PremiumPage';
+import { Panel, ErrorBar, PageLoader } from '../PremiumPage';
 import api from '../../api/axios';
 
 interface DashboardStats {
@@ -20,6 +18,7 @@ interface DashboardStats {
   unsold_books: number;
   unsold_by_admin_books: number;
   total_tickets: number;
+  total_games?: number;
 }
 
 interface AgentInfo {
@@ -64,33 +63,38 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
-  void agentInfo; // available for header/profile use
+  const [totalGames, setTotalGames] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  void agentInfo;
+  void totalGames;
 
   useEffect(() => {
-    api.get('/agent/dashboard').then((res) => {
-      setStats(res.data.data.statistics);
-      setAgentInfo(res.data.data.agent);
-    });
+    Promise.all([
+      api.get('/agent/dashboard').then((res) => {
+        setStats(res.data.data.statistics);
+        setAgentInfo(res.data.data.agent);
+      }),
+      api.get('/agent/games').then((res) => {
+        const d = res.data.data;
+        setTotalGames(Array.isArray(d) ? d.length : (d?.total ?? d?.data?.length ?? 0));
+      }),
+    ]).catch(() => setError('Failed to load dashboard data.')).finally(() => setLoading(false));
   }, []);
-
-  const donutData = [
-    { name: 'Sold Books', value: stats?.sold_books ?? 0, color: '#3b82f6' },
-    { name: 'Unsold Books', value: stats?.unsold_books ?? 0, color: '#fb923c' },
-    { name: 'Available Books', value: stats?.available_books ?? 0, color: '#64748b' },
-  ];
-  const totalBooks = stats?.total_books ?? 0;
 
   const statCards = [
     { name: 'Total Books', value: stats?.total_books ?? '-', subtext: 'All Books', icon: BookCopy, color: 'blue', data: [10, 12, 9, 14, 10, 15, 11, 17, 12, 14] },
     { name: 'Total Tickets', value: stats?.total_tickets ?? '-', subtext: 'All Tickets', icon: Ticket, color: 'emerald', data: [8, 10, 13, 9, 14, 10, 12, 16, 11, 13] },
-    { name: 'Sold Books', value: stats?.sold_books ?? '-', subtext: 'Books Sold', icon: CheckCircle, color: 'violet', data: [6, 8, 7, 12, 7, 11, 8, 13, 9, 12] },
+    { name: 'Assigned Games', value: totalGames || '-', subtext: 'Games Assigned', icon: Gamepad2, color: 'violet', data: [4, 5, 6, 4, 7, 5, 6, 8, 5, 7] },
+    { name: 'Sold Books', value: stats?.sold_books ?? '-', subtext: 'Books Sold', icon: CheckCircle, color: 'cyan', data: [6, 8, 7, 12, 7, 11, 8, 13, 9, 12] },
     { name: 'Unsold Books', value: stats?.unsold_books ?? '-', subtext: 'Books Unsold', icon: XCircle, color: 'orange', data: [9, 10, 13, 8, 12, 7, 11, 15, 9, 12] },
     { name: 'Assigned Books', value: stats?.assigned_books ?? '-', subtext: 'Currently Assigned', icon: ShoppingCart, color: 'rose', data: [7, 9, 12, 8, 13, 7, 10, 16, 9, 12] },
-    { name: 'Available Books', value: stats?.available_books ?? '-', subtext: 'Ready to Assign', icon: Gamepad2, color: 'cyan', data: [5, 7, 10, 6, 11, 7, 9, 15, 8, 10] },
   ];
 
   return (
     <div className="space-y-3 lg:space-y-4">
+      {error && <ErrorBar message={error} />}
+      {loading ? <PageLoader /> : <>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         {statCards.map((stat) => {
           const Icon = stat.icon;
@@ -113,8 +117,8 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.55fr_1.05fr_0.85fr]">
-        <Panel className="p-3">
+      <div className="grid gap-4">
+      <Panel className="p-3">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-950">Sales Overview</h2>
             <button className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
@@ -140,76 +144,9 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         </Panel>
-
-        <Panel className="p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-950">Book Status Overview</h2>
-            <MoreVertical size={17} className="text-slate-400" />
-          </div>
-          <div className="grid items-center gap-2.5 sm:grid-cols-[165px_1fr] xl:grid-cols-1 2xl:grid-cols-[165px_1fr]">
-            <div className="relative h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={donutData} dataKey="value" innerRadius={48} outerRadius={68} paddingAngle={0}>
-                    {donutData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <p className="text-xl font-black text-slate-950">{totalBooks}</p>
-                <p className="text-xs font-medium text-slate-500">Total Books</p>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {donutData.map((item) => (
-                <div key={item.name} className="flex items-start gap-3">
-                  <span className="mt-1.5 h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <div>
-                    <p className="text-xs font-bold text-slate-700 sm:text-sm">{item.name}</p>
-                    <p className="text-xs text-slate-500">{item.value.toLocaleString('en-IN')} ({totalBooks ? ((item.value / totalBooks) * 100).toFixed(1) : 0}%)</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Panel>
-
-        <Panel>
-          <div className="border-b border-slate-100 px-3 py-2.5">
-            <h2 className="text-sm font-bold text-slate-950">Quick Actions</h2>
-          </div>
-          <div className="space-y-2 p-3">
-            {[
-              { name: 'Search Ticker', href: '/agent/ticker-search', icon: Search, color: 'text-blue-600' },
-              { name: 'View My Books', href: '/agent/books', icon: BookOpen, color: 'text-blue-600' },
-              { name: 'View Sold Books', href: '/agent/sold-books', icon: CheckCircle, color: 'text-emerald-600' },
-              { name: 'View Unsold Books', href: '/agent/unsold-books', icon: XCircle, color: 'text-orange-600' },
-              { name: 'View Results', href: '/agent/results', icon: Trophy, color: 'text-violet-600' },
-            ].map((action) => (
-              <Link key={action.name} to={action.href} className="flex items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm hover:border-blue-200 hover:bg-blue-50">
-                <action.icon className={action.color} size={16} />
-                <span>{action.name}</span>
-                <ChevronDown className="ml-auto -rotate-90 text-slate-400" size={15} />
-              </Link>
-            ))}
-          </div>
-        </Panel>
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Panel>
-          <PanelHeader title="Recent Assigned Books" />
-          <DataTable columns={['Book No.', 'Game', 'Tickets', 'Assigned Date', 'Status']} rows={books.map((book) => [book.bookNo, book.game, book.tickets, book.assigned, <StatusBadge value={book.status} />])} />
-        </Panel>
-        <Panel>
-          <PanelHeader title="Recent Sales" />
-          <DataTable columns={['Book No.', 'Game', 'Tickets Sold', 'Amount', 'Date']} rows={sales.map((sale) => [sale.bookNo, sale.game, sale.tickets, sale.amount, sale.date])} />
-        </Panel>
-        <Panel>
-          <PanelHeader title="Active Games" />
-          <DataTable columns={['Game Name', 'Draw Date', 'Status', 'Books', 'Sold']} rows={games.map((game) => [game.name, game.drawDate, <StatusBadge value={game.status} />, game.books, game.sold])} />
-        </Panel>
-      </div>
+    </>
+    }
     </div>
   );
 }

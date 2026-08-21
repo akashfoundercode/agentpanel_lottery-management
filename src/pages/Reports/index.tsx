@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { MetricStrip, PageToolbar, Panel } from '../PremiumPage';
+import { MetricStrip, PageToolbar, Panel, PageLoader, ErrorBar } from '../PremiumPage';
 import api from '../../api/axios';
 
 interface Book {
@@ -14,12 +14,15 @@ interface Book {
 
 export default function Reports() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api.get('/agent/books', { params: { per_page: 100 } }).then((res) => {
       const d = res.data.data;
       setBooks(Array.isArray(d) ? d : (d.data ?? []));
-    });
+    }).catch(() => setError('Failed to load report data.'))
+      .finally(() => setLoading(false));
   }, []);
 
   const total = books.length;
@@ -58,6 +61,8 @@ export default function Reports() {
   return (
     <>
       <PageToolbar title="Reports" subtitle="Book movement, status breakdown, and assignment analytics." search="Search report" />
+      {error && <ErrorBar message={error} />}
+      {loading ? <PageLoader /> : <>
       <MetricStrip items={[
         { label: 'Total Books', value: String(total), tone: 'bg-blue-500' },
         { label: 'Total Tickets', value: String(totalTickets), tone: 'bg-cyan-500' },
@@ -134,6 +139,8 @@ export default function Reports() {
           </div>
         </Panel>
       )}
+      </>
+      }
     </>
   );
 }

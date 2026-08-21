@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
-import { MetricStrip, PageToolbar, Panel, StatusBadge } from '../PremiumPage';
+import { MetricStrip, PageToolbar, Panel, StatusBadge, PageLoader, ErrorBar } from '../PremiumPage';
 import api from '../../api/axios';
 
 interface Book {
@@ -103,13 +103,20 @@ export default function MyBooks() {
   const [search, setSearch] = useState('');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeGame, setActiveGame] = useState<string | null>(null);
 
   const fetchBooks = () => {
+    setFetchLoading(true);
+    setError('');
     api.get('/agent/books', { params: { page, search: search || undefined } }).then((res) => {
       const d: PaginatedResponse = res.data.data;
-      setBooks(d.data);
+      const sorted = [...d.data].sort((a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime());
+      setBooks(sorted);
       setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
-    });
+    }).catch(() => setError('Failed to load books. Please try again.'))
+      .finally(() => setFetchLoading(false));
   };
 
   useEffect(() => { fetchBooks(); }, [page, search]);
@@ -127,9 +134,10 @@ export default function MyBooks() {
   };
 
   const totalTickets = books.reduce((s, b) => s + (b.tickets?.length ?? b.total_tickets), 0);
-  const totalAmount = books.reduce((s, b) => s + b.total_tickets * parseFloat(b.game.ticket_price), 0);
   const soldBooks = books.filter((b) => b.status === 'sold').length;
   const assignedBooks = books.filter((b) => b.status === 'assigned').length;
+  const gameNames = [...new Set(books.map((b) => b.game.game_name))];
+  const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
 
   return (
     <>
@@ -148,60 +156,84 @@ export default function MyBooks() {
         search="Search book number"
         onSearch={setSearch}
       />
+      {error && <ErrorBar message={error} />}
       <MetricStrip items={[
         { label: 'Total Books', value: String(meta.total), tone: 'bg-blue-500' },
         { label: 'Total Tickets', value: String(totalTickets), tone: 'bg-cyan-500' },
         { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' },
         { label: 'Assigned Books', value: String(assignedBooks), tone: 'bg-orange-500' },
       ]} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        <button
+          onClick={() => setActiveGame(null)}
+          className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
+            activeGame === null
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+              : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
+          }`}
+        >
+          All Games
+        </button>
+        {gameNames.map((name) => (
+          <button
+            key={name}
+            onClick={() => setActiveGame(name)}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
+              activeGame === name
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
+            }`}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
       <Panel>
-        <div className="overflow-x-auto">
+        {fetchLoading ? <PageLoader /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                {['Book ID', 'Game', 'Tickets', 'Ticket Price', 'Draw Date', 'Assigned At', 'Action'].map((col) => (
+                {['Book ID', 'Game', 'Draw Date', 'Assigned At', 'Action'].map((col) => (
                   <th key={col} className="px-3 py-2">{col}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {books.map((book) => (
+              {filteredBooks.map((book) => (
                 <tr key={book.id} className="text-slate-700 hover:bg-blue-50/40">
-                  <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{book.total_tickets}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">₹{parseFloat(book.game.ticket_price).toLocaleString('en-IN')}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    {book.status === 'assigned' ? (
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => setConfirm({ book, type: 'sold' })}
-                          className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600"
-                        >
-                          Sold
-                        </button>
-                        <button
-                          onClick={() => setConfirm({ book, type: 'unsold' })}
-                          className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600"
-                        >
-                          Unsold
-                        </button>
-                      </div>
-                    ) : (
-                      <StatusBadge value={book.status} />
-                    )}
-                  </td>
-                </tr>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      {book.status === 'assigned' ? (
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => setConfirm({ book, type: 'sold' })}
+                            className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600"
+                          >
+                            Sold
+                          </button>
+                          <button
+                            onClick={() => setConfirm({ book, type: 'unsold' })}
+                            className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600"
+                          >
+                            Unsold
+                          </button>
+                        </div>
+                      ) : (
+                        <StatusBadge value={book.status} />
+                      )}
+                    </td>
+                  </tr>
               ))}
-              {books.length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>
+              {filteredBooks.length === 0 && (
+                <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>
               )}
             </tbody>
           </table>
-        </div>
-        {meta.last_page > 1 && (
+        </div>}
+        {!fetchLoading && meta.last_page > 1 && (
           <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.current_page === 1}
               className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { MetricStrip, PageToolbar, Panel, StatusBadge } from '../PremiumPage';
+import { MetricStrip, PageToolbar, Panel, StatusBadge, PageLoader, ErrorBar } from '../PremiumPage';
 import api from '../../api/axios';
 
 interface Book {
@@ -29,13 +29,18 @@ export default function AssignmentHistory() {
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
     api.get('/agent/books', { params: { page, search: search || undefined } }).then((res) => {
       const d: PaginatedResponse = res.data.data;
       setBooks(d.data ?? []);
       setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
-    });
+    }).catch(() => setError('Failed to load assignment history.'))
+      .finally(() => setLoading(false));
   }, [page, search]);
 
   const soldCount = books.filter((b) => b.status === 'sold').length;
@@ -50,6 +55,7 @@ export default function AssignmentHistory() {
         search="Search book ID"
         onSearch={setSearch}
       />
+      {error && <ErrorBar message={error} />}
       <MetricStrip items={[
         { label: 'Total Books', value: String(meta.total), tone: 'bg-blue-500' },
         { label: 'Assigned', value: String(assignedCount), tone: 'bg-violet-500' },
@@ -57,7 +63,7 @@ export default function AssignmentHistory() {
         { label: 'Unsold', value: String(unsoldCount), tone: 'bg-orange-500' },
       ]} />
       <Panel>
-        <div className="overflow-x-auto">
+        {loading ? <PageLoader /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[800px] text-left text-xs">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -84,8 +90,8 @@ export default function AssignmentHistory() {
               )}
             </tbody>
           </table>
-        </div>
-        {meta.last_page > 1 && (
+        </div>}
+        {!loading && meta.last_page > 1 && (
           <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.current_page === 1}
               className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Youtube, Facebook } from 'lucide-react';
-import { MetricStrip, PageToolbar, Panel, StatusBadge } from '../PremiumPage';
+import { MetricStrip, PageToolbar, Panel, StatusBadge, PageLoader, ErrorBar } from '../PremiumPage';
 import api from '../../api/axios';
 
 interface Game {
@@ -18,20 +18,17 @@ interface Game {
   status: string;
 }
 
-interface PaginatedResponse {
-  data: Game[];
-  current_page: number;
-  last_page: number;
-  total: number;
-}
-
 export default function MyGames() {
   const [games, setGames] = useState<Game[]>([]);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
     api.get('/agent/games', { params: { page, search: search || undefined } }).then((res) => {
       const d = res.data.data;
       if (Array.isArray(d)) {
@@ -41,7 +38,8 @@ export default function MyGames() {
         setGames(d.data ?? []);
         setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
       }
-    });
+    }).catch(() => setError('Failed to load games. Please try again.'))
+      .finally(() => setLoading(false));
   }, [page, search]);
 
   const activeCount = games?.filter((g) => g.status === 'active').length ?? 0;
@@ -56,6 +54,7 @@ export default function MyGames() {
         search="Search game name"
         onSearch={setSearch}
       />
+      {error && <ErrorBar message={error} />}
       <MetricStrip items={[
         { label: 'Total Games', value: String(games?.length ?? 0), tone: 'bg-blue-500' },
         { label: 'Active Games', value: String(activeCount), tone: 'bg-emerald-500' },
@@ -63,7 +62,7 @@ export default function MyGames() {
         { label: 'Total Tickets', value: totalTickets.toLocaleString('en-IN'), tone: 'bg-amber-400' },
       ]} />
       <Panel>
-        <div className="overflow-x-auto">
+        {loading ? <PageLoader /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[800px] text-left text-xs">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -104,8 +103,8 @@ export default function MyGames() {
               )}
             </tbody>
           </table>
-        </div>
-        {meta.last_page > 1 && (
+        </div>}
+        {!loading && meta.last_page > 1 && (
           <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.current_page === 1}
               className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
