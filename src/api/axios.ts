@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  baseURL: import.meta.env.DEV && apiBaseUrl.startsWith('http') ? '/api/v1' : apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
