@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock3 } from 'lucide-react';
 import { MetricStrip, PageToolbar, Panel, StatusBadge, PageLoader, ErrorBar } from '../PremiumPage';
 import api from '../../api/axios';
 
@@ -11,6 +11,7 @@ interface Book {
   draw_date: string;
   status: string;
   assigned_at: string;
+  expiry_at?: string | null;
   game: { game_name: string; ticket_price: string };
   tickets: { ticket_number: string }[];
 }
@@ -26,6 +27,19 @@ interface ConfirmState {
   book: Book;
   type: 'sold' | 'unsold';
 }
+
+const getBookDeadline = (book: Book) => book.expiry_at
+  ? new Date(book.expiry_at).getTime()
+  : new Date(book.assigned_at).getTime() + 60 * 60 * 1000;
+
+const isResponseExpired = (book: Book, now: number) => book.status === 'assigned' && getBookDeadline(book) <= now;
+
+const formatRemaining = (deadline: number, now: number) => {
+  const remaining = Math.max(0, deadline - now);
+  const minutes = Math.floor(remaining / 60000);
+  const hours = Math.floor(minutes / 60);
+  return hours > 0 ? `${hours}h ${minutes % 60}m left` : `${minutes}m left`;
+};
 
 function ConfirmModal({ confirm, onClose, onConfirm, loading }: {
   confirm: ConfirmState;
@@ -106,6 +120,12 @@ export default function MyBooks() {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const fetchBooks = () => {
     setFetchLoading(true);
@@ -123,6 +143,11 @@ export default function MyBooks() {
 
   const handleConfirm = async () => {
     if (!confirm) return;
+    if (isResponseExpired(confirm.book, Date.now())) {
+      setConfirm(null);
+      setError('This book response window has expired. Status changed to Unsold by Admin.');
+      return;
+    }
     setLoading(true);
     try {
       await api.post(`/agent/books/${confirm.type}`, { book_id: confirm.book.id, agent_id: confirm.book.agent_id });
@@ -135,7 +160,7 @@ export default function MyBooks() {
 
   const totalTickets = books.reduce((s, b) => s + (b.tickets?.length ?? b.total_tickets), 0);
   const soldBooks = books.filter((b) => b.status === 'sold').length;
-  const assignedBooks = books.filter((b) => b.status === 'assigned').length;
+  const assignedBooks = books.filter((b) => b.status === 'assigned' && !isResponseExpired(b, now)).length;
   const gameNames = [...new Set(books.map((b) => b.game.game_name))];
   const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
 
@@ -166,11 +191,10 @@ export default function MyBooks() {
       <div className="mb-3 flex flex-wrap gap-2">
         <button
           onClick={() => setActiveGame(null)}
-          className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
-            activeGame === null
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-              : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
-          }`}
+          className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${activeGame === null
+            ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+            : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
+            }`}
         >
           All Games
         </button>
@@ -178,11 +202,10 @@ export default function MyBooks() {
           <button
             key={name}
             onClick={() => setActiveGame(name)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
-              activeGame === name
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
-            }`}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${activeGame === name
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+              : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
+              }`}
           >
             {name}
           </button>
@@ -201,31 +224,39 @@ export default function MyBooks() {
             <tbody className="divide-y divide-slate-100">
               {filteredBooks.map((book) => (
                 <tr key={book.id} className="text-slate-700 hover:bg-blue-50/40">
-                    <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">
-                      {book.status === 'assigned' ? (
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => setConfirm({ book, type: 'sold' })}
-                            className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600"
-                          >
-                            Sold
-                          </button>
-                          <button
-                            onClick={() => setConfirm({ book, type: 'unsold' })}
-                            className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600"
-                          >
-                            Unsold
-                          </button>
-                        </div>
-                      ) : (
-                        <StatusBadge value={book.status} />
-                      )}
-                    </td>
-                  </tr>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    {book.status === 'assigned' && isResponseExpired(book, now) ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 ring-1 ring-red-100">
+                        <Clock3 size={13} />
+                        Unsold by Admin
+                      </div>
+                    ) : book.status === 'assigned' ? (
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setConfirm({ book, type: 'sold' })}
+                          className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600"
+                        >
+                          Sold
+                        </button>
+                        <button
+                          onClick={() => setConfirm({ book, type: 'unsold' })}
+                          className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600"
+                        >
+                          Unsold
+                        </button>
+                        <span className="self-center text-[10px] font-semibold text-slate-400">
+                          {formatRemaining(getBookDeadline(book), now)}
+                        </span>
+                      </div>
+                    ) : (
+                      <StatusBadge value={book.status} />
+                    )}
+                  </td>
+                </tr>
               ))}
               {filteredBooks.length === 0 && (
                 <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>
