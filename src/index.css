@@ -27,7 +27,7 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #7c8da5;
 }
-
+  
 .gold-text {
   background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
   -webkit-background-clip: text;
