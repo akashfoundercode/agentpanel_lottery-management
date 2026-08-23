@@ -27,6 +27,14 @@ function getBooks(payload: unknown): BookStatus[] {
     return value.data && typeof value.data === 'object' ? getBooks(value.data) : [];
 }
 
+function getAgent(payload: unknown): Agent | null {
+    if (!payload || typeof payload !== 'object') return null;
+    const value = payload as { data?: unknown; agent?: unknown; id?: number | string; agent_id?: number | string };
+    if (value.id !== undefined || value.agent_id !== undefined) return value;
+    if (value.agent && typeof value.agent === 'object') return value.agent as Agent;
+    return value.data && typeof value.data === 'object' ? getAgent(value.data) : null;
+}
+
 const formatDate = (value: string | null) => value
     ? new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
     : '—';
@@ -61,15 +69,19 @@ export default function MyBooks() {
     const fetchBooks = async () => {
         setLoading(true);
         setError('');
-        try {
-            const [statusResponse, profileResponse] = await Promise.all([api.get('/agent/books/status'), api.get('/agent/profile')]);
-            setBooks(getBooks(statusResponse.data));
-            setAgent((profileResponse.data.data ?? profileResponse.data) as Agent);
-        } catch {
+        const [statusResult, profileResult] = await Promise.allSettled([api.get('/agent/books/status'), api.get('/agent/profile')]);
+        if (statusResult.status === 'fulfilled') {
+            setBooks(getBooks(statusResult.value.data));
+        } else {
             setError('Failed to load book status. Please try again.');
-        } finally {
-            setLoading(false);
         }
+        if (profileResult.status === 'fulfilled') {
+            setAgent(getAgent(profileResult.value.data));
+        }
+        if (statusResult.status === 'fulfilled' && profileResult.status === 'rejected') {
+            setMessage('Book actions are unavailable until your agent profile can be loaded.');
+        }
+        setLoading(false);
     };
 
     useEffect(() => {
