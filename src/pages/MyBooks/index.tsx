@@ -10,6 +10,8 @@ interface Book {
   total_tickets: number;
   draw_date: string;
   status: string;
+  admin_status?: string | null;
+  is_locked?: boolean;
   assigned_at: string;
   game: { id?: number; game_id?: number; game_name: string; ticket_price: string; status?: string | null };
   tickets: { ticket_number: string }[];
@@ -27,18 +29,13 @@ interface ConfirmState {
   type: 'sold' | 'unsold';
 }
 
-interface LockStatus {
-  is_locked: boolean;
-  remaining_minutes: number;
-  lock_deadline_at: string | null;
-}
-
 const isGameLive = (book: Book) => {
   const status = book.game.status?.toLowerCase();
   return status === 'live' || status === 'active';
 };
 
 const normalizedBookStatus = (book: Book) => book.status.toLowerCase();
+const normalizedAdminStatus = (book: Book) => book.admin_status?.toLowerCase() ?? '';
 
 function ConfirmModal({ confirm, onClose, onConfirm, loading }: {
   confirm: ConfirmState;
@@ -119,7 +116,6 @@ export default function MyBooks() {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeGame, setActiveGame] = useState<string | null>(null);
-  const [lockStatuses, setLockStatuses] = useState<Record<number, LockStatus>>({});
 
   const fetchBooks = () => {
     setFetchLoading(true);
@@ -129,16 +125,7 @@ export default function MyBooks() {
       const sorted = [...d.data].sort((a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime());
       setBooks(sorted);
       setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
-      const gameIds = [...new Set(sorted.map((book) => book.game.id ?? book.game.game_id).filter((id): id is number => id !== undefined))];
-      return Promise.all(gameIds.map(async (gameId) => {
-        const response = await api.get(`/admin/games/${gameId}/lock-status`);
-        const status = response.data.data as LockStatus;
-        return [gameId, status] as const;
-      }));
     }).catch(() => setError('Failed to load books. Please try again.'))
-      .then((statuses) => {
-        if (statuses) setLockStatuses(Object.fromEntries(statuses));
-      })
       .finally(() => setFetchLoading(false));
   };
 
@@ -169,8 +156,13 @@ export default function MyBooks() {
   const assignedBooks = books.filter((b) => normalizedBookStatus(b) === 'assigned').length;
   const gameNames = [...new Set(books.map((b) => b.game.game_name))];
   const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
-  const isBookLocked = (book: Book) => normalizedBookStatus(book) === 'assigned'
-    && Boolean(lockStatuses[book.game.id ?? book.game.game_id ?? -1]?.is_locked);
+  const isBookLocked = (book: Book) => {
+    const bookStatus = normalizedBookStatus(book);
+    const adminStatus = normalizedAdminStatus(book);
+    return bookStatus === 'unsold_by_admin'
+      || adminStatus === 'unsold_by_admin'
+      || (bookStatus === 'assigned' && book.is_locked === true);
+  };
 
   return (
     <>
@@ -224,7 +216,7 @@ export default function MyBooks() {
           <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                {['Book ID', 'Game', 'Game Status', 'Draw Date', 'Assigned At', 'Action'].map((col) => (
+                {['Book ID', 'Game', 'Book Status', 'Draw Date', 'Assigned At', 'Action'].map((col) => (
                   <th key={col} className="px-3 py-2">{col}</th>
                 ))}
               </tr>
@@ -240,6 +232,8 @@ export default function MyBooks() {
                         <LockKeyhole size={13} />
                         Unsold by Admin
                       </div>
+                    ) : normalizedBookStatus(book) === 'sold' || normalizedBookStatus(book) === 'unsold' ? (
+                      <StatusBadge value={book.status} />
                     ) : isGameLive(book) ? (
                       <StatusBadge value="Live" />
                     ) : (
