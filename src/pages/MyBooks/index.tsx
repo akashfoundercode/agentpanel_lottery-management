@@ -38,6 +38,8 @@ const isGameLive = (book: Book) => {
   return status === 'live' || status === 'active';
 };
 
+const normalizedBookStatus = (book: Book) => book.status.toLowerCase();
+
 function ConfirmModal({ confirm, onClose, onConfirm, loading }: {
   confirm: ConfirmState;
   onClose: () => void;
@@ -163,8 +165,8 @@ export default function MyBooks() {
   const assignedBooks = books.filter((b) => b.status === 'assigned').length;
   const gameNames = [...new Set(books.map((b) => b.game.game_name))];
   const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
-  const isBookLocked = (book: Book) => book.status === 'unsold_by_admin'
-    || Boolean(lockStatuses[book.game.id ?? book.game.game_id ?? -1]?.is_locked);
+  const isBookLocked = (book: Book) => normalizedBookStatus(book) === 'assigned'
+    && Boolean(lockStatuses[book.game.id ?? book.game.game_id ?? -1]?.is_locked);
 
   return (
     <>
@@ -250,7 +252,7 @@ export default function MyBooks() {
                         <LockKeyhole size={13} />
                         Unsold by Admin
                       </div>
-                    ) : book.status === 'assigned' ? (
+                    ) : normalizedBookStatus(book) === 'assigned' ? (
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => setConfirm({ book, type: 'sold' })}
@@ -265,9 +267,9 @@ export default function MyBooks() {
                           Unsold
                         </button>
                       </div>
-                    ) : book.status === 'sold' ? (
+                    ) : normalizedBookStatus(book) === 'sold' ? (
                       <StatusBadge value="Sold" />
-                    ) : book.status === 'unsold' ? (
+                    ) : normalizedBookStatus(book) === 'unsold' ? (
                       <StatusBadge value="Unsold" />
                     ) : (
                       <StatusBadge value={book.status} />
