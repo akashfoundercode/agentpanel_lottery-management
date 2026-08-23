@@ -1,300 +1,147 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, LockKeyhole } from 'lucide-react';
+import { CheckCircle2, LockKeyhole, RefreshCw, XCircle } from 'lucide-react';
 import { MetricStrip, PageToolbar, Panel, StatusBadge, PageLoader, ErrorBar } from '../PremiumPage';
 import api from '../../api/axios';
 
-interface Book {
-  id: number;
-  book_id: string;
-  agent_id: number;
-  total_tickets: number;
-  draw_date: string;
-  status: string;
-  admin_status?: string | null;
-  is_locked?: boolean;
-  assigned_at: string;
-  game: { id?: number; game_id?: number; game_name: string; ticket_price: string; status?: string | null };
-  tickets: { ticket_number: string }[];
+interface BookStatus {
+    book_id: number | string;
+    book_number: string | number;
+    status: string;
+    deadline_at: string | null;
+    is_locked: boolean;
+    can_update_status: boolean;
+    can_request_reopen: boolean;
+    game_status: string | null;
+    game_live_at: string | null;
 }
 
-interface PaginatedResponse {
-  data: Book[];
-  current_page: number;
-  last_page: number;
-  total: number;
+interface Agent { id?: number | string; agent_id?: number | string; }
+interface ConfirmState { book: BookStatus; type: 'sold' | 'unsold'; }
+
+function getBooks(payload: unknown): BookStatus[] {
+    if (Array.isArray(payload)) return payload as BookStatus[];
+    if (!payload || typeof payload !== 'object') return [];
+    const value = payload as { data?: unknown; books?: unknown };
+    if (Array.isArray(value.data)) return value.data as BookStatus[];
+    if (Array.isArray(value.books)) return value.books as BookStatus[];
+    return value.data && typeof value.data === 'object' ? getBooks(value.data) : [];
 }
 
-interface ConfirmState {
-  book: Book;
-  type: 'sold' | 'unsold';
-}
+const formatDate = (value: string | null) => value
+    ? new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+    : '—';
 
-const isGameLive = (book: Book) => {
-  const status = book.game.status?.toLowerCase();
-  return status === 'live' || status === 'active';
-};
-
-const normalizedBookStatus = (book: Book) => book.status.toLowerCase();
-const normalizedAdminStatus = (book: Book) => book.admin_status?.toLowerCase() ?? '';
-
-function ConfirmModal({ confirm, onClose, onConfirm, loading }: {
-  confirm: ConfirmState;
-  onClose: () => void;
-  onConfirm: () => void;
-  loading: boolean;
-}) {
-  const isSold = confirm.type === 'sold';
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white shadow-2xl">
-        <div className={`flex items-center gap-3 rounded-t-xl px-5 py-4 ${isSold ? 'bg-emerald-50' : 'bg-orange-50'}`}>
-          {isSold
-            ? <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500" />
-            : <XCircle className="h-6 w-6 shrink-0 text-orange-500" />}
-          <p className={`text-sm font-black ${isSold ? 'text-emerald-700' : 'text-orange-700'}`}>
-            Mark as {isSold ? 'Sold' : 'Unsold'}
-          </p>
+function ConfirmModal({ confirm, onClose, onConfirm, loading }: { confirm: ConfirmState; onClose: () => void; onConfirm: () => void; loading: boolean }) {
+    const isSold = confirm.type === 'sold';
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className={`flex items-center gap-3 rounded-t-xl px-5 py-4 ${isSold ? 'bg-emerald-50' : 'bg-orange-50'}`}>
+                {isSold ? <CheckCircle2 className="h-6 w-6 text-emerald-500" /> : <XCircle className="h-6 w-6 text-orange-500" />}
+                <p className={`text-sm font-black ${isSold ? 'text-emerald-700' : 'text-orange-700'}`}>Mark as {isSold ? 'Sold' : 'Unsold'}</p>
+            </div>
+            <p className="px-5 py-5 text-sm text-slate-600">Are you sure you want to mark book <span className="font-black text-slate-900">{confirm.book.book_number}</span> as {isSold ? 'sold' : 'unsold'}?</p>
+            <div className="flex gap-2 border-t border-slate-100 px-5 py-3">
+                <button onClick={onClose} disabled={loading} className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button onClick={onConfirm} disabled={loading} className={`flex-1 rounded-lg py-2 text-xs font-black text-white disabled:opacity-50 ${isSold ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-orange-500 hover:bg-orange-600'}`}>{loading ? 'Please wait...' : `Yes, Mark as ${isSold ? 'Sold' : 'Unsold'}`}</button>
+            </div>
         </div>
-
-        <div className="px-5 py-4">
-          <p className="text-sm text-slate-600">
-            Are you sure you want to mark book
-            <span className="mx-1 font-black text-slate-900">{confirm.book.book_id}</span>
-            as <span className={`font-black ${isSold ? 'text-emerald-600' : 'text-orange-600'}`}>{isSold ? 'Sold' : 'Unsold'}</span>?
-          </p>
-
-          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600 space-y-1">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Game</span>
-              <span className="font-bold text-slate-700">{confirm.book.game.game_name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Total Tickets</span>
-              <span className="font-bold text-slate-700">{confirm.book.total_tickets}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Ticket Price</span>
-              <span className="font-bold text-slate-700">₹{parseFloat(confirm.book.game.ticket_price).toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Draw Date</span>
-              <span className="font-bold text-slate-700">{new Date(confirm.book.draw_date).toLocaleDateString('en-IN')}</span>
-            </div>
-          </div>
-
-          <p className="mt-3 text-[11px] text-slate-400">This action will be reported to the admin immediately.</p>
-        </div>
-
-        <div className="flex gap-2 border-t border-slate-100 px-5 py-3">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={`flex-1 rounded-lg py-2 text-xs font-black text-white disabled:opacity-50 ${isSold ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-orange-500 hover:bg-orange-600'}`}
-          >
-            {loading ? 'Please wait...' : `Yes, Mark as ${isSold ? 'Sold' : 'Unsold'}`}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    </div>;
 }
 
 export default function MyBooks() {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [fetchLoading, setFetchLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeGame, setActiveGame] = useState<string | null>(null);
+    const [books, setBooks] = useState<BookStatus[]>([]);
+    const [agent, setAgent] = useState<Agent | null>(null);
+    const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [reopenLoading, setReopenLoading] = useState<number | string | null>(null);
+    const [error, setError] = useState('');
+    const [message, setMessage] = useState('');
 
-  const fetchBooks = () => {
-    setFetchLoading(true);
-    setError('');
-    api.get('/agent/books', { params: { page, search: search || undefined } }).then((res) => {
-      const d: PaginatedResponse = res.data.data;
-      const sorted = [...d.data].sort((a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime());
-      setBooks(sorted);
-      setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
-    }).catch(() => setError('Failed to load books. Please try again.'))
-      .finally(() => setFetchLoading(false));
-  };
-
-  useEffect(() => {
-    fetchBooks();
-    window.addEventListener('focus', fetchBooks);
-    const timer = window.setInterval(fetchBooks, 30000);
-    return () => {
-      window.removeEventListener('focus', fetchBooks);
-      window.clearInterval(timer);
+    const fetchBooks = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [statusResponse, profileResponse] = await Promise.all([api.get('/agent/books/status'), api.get('/agent/profile')]);
+            setBooks(getBooks(statusResponse.data));
+            setAgent((profileResponse.data.data ?? profileResponse.data) as Agent);
+        } catch {
+            setError('Failed to load book status. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
-  }, [page, search]);
 
-  const handleConfirm = async () => {
-    if (!confirm) return;
-    setLoading(true);
-    try {
-      await api.post(`/agent/books/${confirm.type}`, { book_id: confirm.book.id, agent_id: confirm.book.agent_id });
-      setConfirm(null);
-      fetchBooks();
-    } finally {
-      setLoading(false);
-    }
-  };
+    useEffect(() => {
+        fetchBooks();
+        window.addEventListener('focus', fetchBooks);
+        return () => window.removeEventListener('focus', fetchBooks);
+    }, []);
 
-  const totalTickets = books.reduce((s, b) => s + (b.tickets?.length ?? b.total_tickets), 0);
-  const soldBooks = books.filter((b) => normalizedBookStatus(b) === 'sold').length;
-  const assignedBooks = books.filter((b) => normalizedBookStatus(b) === 'assigned').length;
-  const gameNames = [...new Set(books.map((b) => b.game.game_name))];
-  const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
-  const isBookLocked = (book: Book) => {
-    const bookStatus = normalizedBookStatus(book);
-    const adminStatus = normalizedAdminStatus(book);
-    return bookStatus === 'unsold_by_admin'
-      || adminStatus === 'unsold_by_admin'
-      || (bookStatus === 'assigned' && book.is_locked === true);
-  };
+    const agentId = agent?.id ?? agent?.agent_id;
 
-  return (
-    <>
-      {confirm && (
-        <ConfirmModal
-          confirm={confirm}
-          onClose={() => setConfirm(null)}
-          onConfirm={handleConfirm}
-          loading={loading}
-        />
-      )}
+    const handleConfirm = async () => {
+        if (!confirm || agentId === undefined) return;
+        setActionLoading(true);
+        setError('');
+        try {
+            await api.post(`/agent/books/${confirm.type}`, { book_id: confirm.book.book_id, agent_id: agentId });
+            setConfirm(null);
+            await fetchBooks();
+        } catch {
+            setError(`Failed to mark book as ${confirm.type}. Please try again.`);
+        } finally {
+            setActionLoading(false);
+        }
+    };
 
-      <PageToolbar
-        title="My Books"
-        subtitle="Assigned ticket books — mark each book as sold or unsold."
-        search="Search book number"
-        onSearch={setSearch}
-      />
-      {error && <ErrorBar message={error} />}
-      <MetricStrip items={[
-        { label: 'Total Books', value: String(meta.total), tone: 'bg-blue-500' },
-        { label: 'Total Tickets', value: String(totalTickets), tone: 'bg-cyan-500' },
-        { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' },
-        { label: 'Assigned Books', value: String(assignedBooks), tone: 'bg-orange-500' },
-      ]} />
-      <div className="mb-3 flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveGame(null)}
-          className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${activeGame === null
-            ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-            : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
-            }`}
-        >
-          All Games
-        </button>
-        {gameNames.map((name) => (
-          <button
-            key={name}
-            onClick={() => setActiveGame(name)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${activeGame === name
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-              : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
-              }`}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      <Panel>
-        {fetchLoading ? <PageLoader /> : <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                {['Book ID', 'Game', 'Book Status', 'Draw Date', 'Assigned At', 'Action'].map((col) => (
-                  <th key={col} className="px-3 py-2">{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredBooks.map((book) => (
-                <tr key={book.id} className="text-slate-700 hover:bg-blue-50/40">
-                  <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    {isBookLocked(book) ? (
-                      <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-                        <LockKeyhole size={13} />
-                        Unsold by Admin
-                      </div>
-                    ) : normalizedBookStatus(book) === 'sold' || normalizedBookStatus(book) === 'unsold' ? (
-                      <StatusBadge value={book.status} />
-                    ) : isGameLive(book) ? (
-                      <StatusBadge value="Live" />
-                    ) : (
-                      <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-100">
-                        Game Not Live
-                      </span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    {isBookLocked(book) ? (
-                      <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-                        <LockKeyhole size={13} />
-                        Unsold by Admin
-                      </div>
-                    ) : normalizedBookStatus(book) === 'assigned' ? (
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => setConfirm({ book, type: 'sold' })}
-                          className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600"
-                        >
-                          Sold
-                        </button>
-                        <button
-                          onClick={() => setConfirm({ book, type: 'unsold' })}
-                          className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600"
-                        >
-                          Unsold
-                        </button>
-                      </div>
-                    ) : normalizedBookStatus(book) === 'sold' ? (
-                      <StatusBadge value="Sold" />
-                    ) : normalizedBookStatus(book) === 'unsold' ? (
-                      <StatusBadge value="Unsold" />
-                    ) : (
-                      <StatusBadge value={book.status} />
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {filteredBooks.length === 0 && (
-                <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>}
-        {!fetchLoading && meta.last_page > 1 && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.current_page === 1}
-              className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-xs font-bold text-slate-600">{meta.current_page} / {meta.last_page}</span>
-            <button onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))} disabled={meta.current_page === meta.last_page}
-              className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
-      </Panel>
-    </>
-  );
+    const requestReopen = async (book: BookStatus) => {
+        if (agentId === undefined) return;
+        setReopenLoading(book.book_id);
+        setError('');
+        setMessage('');
+        try {
+            await api.post('/agent/books/request-reopen', { book_id: book.book_id, agent_id: agentId });
+            setMessage(`Reopen request submitted for book ${book.book_number}.`);
+            await fetchBooks();
+        } catch {
+            setError('Failed to request book reopening. Please try again.');
+        } finally {
+            setReopenLoading(null);
+        }
+    };
+
+    const soldBooks = books.filter((book) => book.status.toLowerCase() === 'sold').length;
+    const unsoldBooks = books.filter((book) => book.status.toLowerCase().includes('unsold')).length;
+
+    return <>
+        {confirm && <ConfirmModal confirm={confirm} onClose={() => setConfirm(null)} onConfirm={handleConfirm} loading={actionLoading} />}
+        <PageToolbar title="My Books" subtitle="Review assigned book status and update eligible books." />
+        {error && <ErrorBar message={error} />}
+        {message && <div className="mb-3 rounded-md bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">{message}</div>}
+        <MetricStrip items={[{ label: 'Total Books', value: String(books.length), tone: 'bg-blue-500' }, { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' }, { label: 'Unsold Books', value: String(unsoldBooks), tone: 'bg-orange-500' }]} />
+        <Panel>
+            {loading ? <PageLoader /> : <div className="overflow-x-auto">
+                <table className="w-full min-w-[1050px] text-left text-xs">
+                    <thead><tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">{['Book ID', 'Book Number', 'Status', 'Deadline', 'Locked', 'Game Status', 'Game Live At', 'Action'].map((column) => <th key={column} className="px-3 py-2">{column}</th>)}</tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {books.map((book) => {
+                            const adminUnsold = book.status.toLowerCase() === 'unsold_by_admin';
+                            return <tr key={book.book_id} className="text-slate-700 hover:bg-blue-50/40">
+                                <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5 font-semibold">{book.book_number}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">{adminUnsold ? <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600"><LockKeyhole size={13} />Unsold by Admin</span> : <StatusBadge value={book.status} />}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">{formatDate(book.deadline_at)}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">{book.is_locked ? 'Yes' : 'No'}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">{book.game_status ?? '—'}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">{formatDate(book.game_live_at)}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">{book.can_update_status ? <div className="flex gap-1.5"><button onClick={() => setConfirm({ book, type: 'sold' })} className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600">Sold</button><button onClick={() => setConfirm({ book, type: 'unsold' })} className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600">Unsold</button></div> : book.can_request_reopen ? <button onClick={() => requestReopen(book)} disabled={reopenLoading === book.book_id || agentId === undefined} className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-50 disabled:opacity-50"><RefreshCw size={13} className={reopenLoading === book.book_id ? 'animate-spin' : ''} />Request Reopen</button> : <span className="text-slate-400">No action</span>}</td>
+                            </tr>;
+                        })}
+                        {books.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>}
+                    </tbody>
+                </table>
+            </div>}
+        </Panel>
+    </>;
 }
