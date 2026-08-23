@@ -28,7 +28,7 @@ export default function SoldBooks() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const fetchBooks = () => {
     setLoading(true);
     setError('');
     api.get('/agent/books', { params: { page, search: search || undefined, status: 'sold' } })
@@ -38,6 +38,12 @@ export default function SoldBooks() {
         setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
       }).catch(() => setError('Failed to load sold books.'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchBooks();
+    window.addEventListener('focus', fetchBooks);
+    return () => window.removeEventListener('focus', fetchBooks);
   }, [page, search]);
 
   const totalValue = books.reduce((s, b) => s + b.total_tickets * parseFloat(b.game.ticket_price), 0);

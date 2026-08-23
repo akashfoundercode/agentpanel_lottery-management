@@ -144,8 +144,12 @@ export default function MyBooks() {
 
   useEffect(() => {
     fetchBooks();
+    window.addEventListener('focus', fetchBooks);
     const timer = window.setInterval(fetchBooks, 30000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.removeEventListener('focus', fetchBooks);
+      window.clearInterval(timer);
+    };
   }, [page, search]);
 
   const handleConfirm = async () => {
@@ -161,8 +165,8 @@ export default function MyBooks() {
   };
 
   const totalTickets = books.reduce((s, b) => s + (b.tickets?.length ?? b.total_tickets), 0);
-  const soldBooks = books.filter((b) => b.status === 'sold').length;
-  const assignedBooks = books.filter((b) => b.status === 'assigned').length;
+  const soldBooks = books.filter((b) => normalizedBookStatus(b) === 'sold').length;
+  const assignedBooks = books.filter((b) => normalizedBookStatus(b) === 'assigned').length;
   const gameNames = [...new Set(books.map((b) => b.game.game_name))];
   const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
   const isBookLocked = (book: Book) => normalizedBookStatus(book) === 'assigned'
