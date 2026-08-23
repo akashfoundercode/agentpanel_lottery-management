@@ -11,7 +11,7 @@ interface Book {
   draw_date: string;
   status: string;
   assigned_at: string;
-  game: { game_name: string; ticket_price: string; status?: string | null };
+  game: { id?: number; game_id?: number; game_name: string; ticket_price: string; status?: string | null };
   tickets: { ticket_number: string }[];
 }
 
@@ -25,6 +25,12 @@ interface PaginatedResponse {
 interface ConfirmState {
   book: Book;
   type: 'sold' | 'unsold';
+}
+
+interface LockStatus {
+  is_locked: boolean;
+  remaining_minutes: number;
+  lock_deadline_at: string | null;
 }
 
 const isGameLive = (book: Book) => {
@@ -111,6 +117,7 @@ export default function MyBooks() {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [lockStatuses, setLockStatuses] = useState<Record<number, LockStatus>>({});
 
   const fetchBooks = () => {
     setFetchLoading(true);
@@ -120,7 +127,16 @@ export default function MyBooks() {
       const sorted = [...d.data].sort((a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime());
       setBooks(sorted);
       setMeta({ current_page: d.current_page, last_page: d.last_page, total: d.total });
+      const gameIds = [...new Set(sorted.map((book) => book.game.id ?? book.game.game_id).filter((id): id is number => id !== undefined))];
+      return Promise.all(gameIds.map(async (gameId) => {
+        const response = await api.get(`/admin/games/${gameId}/lock-status`);
+        const status = response.data.data as LockStatus;
+        return [gameId, status] as const;
+      }));
     }).catch(() => setError('Failed to load books. Please try again.'))
+      .then((statuses) => {
+        if (statuses) setLockStatuses(Object.fromEntries(statuses));
+      })
       .finally(() => setFetchLoading(false));
   };
 
@@ -147,6 +163,8 @@ export default function MyBooks() {
   const assignedBooks = books.filter((b) => b.status === 'assigned').length;
   const gameNames = [...new Set(books.map((b) => b.game.game_name))];
   const filteredBooks = activeGame ? books.filter((b) => b.game.game_name === activeGame) : books;
+  const isBookLocked = (book: Book) => book.status === 'unsold_by_admin'
+    || Boolean(lockStatuses[book.game.id ?? book.game.game_id ?? -1]?.is_locked);
 
   return (
     <>
@@ -211,7 +229,12 @@ export default function MyBooks() {
                   <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
-                    {isGameLive(book) ? (
+                    {isBookLocked(book) ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+                        <LockKeyhole size={13} />
+                        Unsold by Admin
+                      </div>
+                    ) : isGameLive(book) ? (
                       <StatusBadge value="Live" />
                     ) : (
                       <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 ring-1 ring-amber-100">
@@ -222,7 +245,7 @@ export default function MyBooks() {
                   <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.draw_date).toLocaleDateString('en-IN')}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">{new Date(book.assigned_at).toLocaleDateString('en-IN')}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
-                    {book.status === 'unsold_by_admin' ? (
+                    {isBookLocked(book) ? (
                       <div className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
                         <LockKeyhole size={13} />
                         Unsold by Admin

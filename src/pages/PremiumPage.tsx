@@ -41,15 +41,18 @@ export function PanelHeader({ title, action = 'View All' }: { title: string; act
 
 export function StatusBadge({ value }: { value: string }) {
   const tone = value.toLowerCase();
-  const styles = tone.includes('live') || tone.includes('active') || tone.includes('published')
-    ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
-    : tone.includes('upcoming') || tone.includes('verified')
-      ? 'bg-blue-50 text-blue-700 ring-blue-100'
-      : tone.includes('settling')
-        ? 'bg-amber-50 text-amber-700 ring-amber-100'
-        : 'bg-slate-50 text-slate-600 ring-slate-100';
+  const label = tone === 'unsold_by_admin' ? 'Unsold by Admin' : value;
+  const styles = tone === 'unsold_by_admin'
+    ? 'bg-slate-100 text-slate-600 ring-slate-200'
+    : tone.includes('live') || tone.includes('active') || tone.includes('published')
+      ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+      : tone.includes('upcoming') || tone.includes('verified')
+        ? 'bg-blue-50 text-blue-700 ring-blue-100'
+        : tone.includes('settling')
+          ? 'bg-amber-50 text-amber-700 ring-amber-100'
+          : 'bg-slate-50 text-slate-600 ring-slate-100';
 
-  return <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-bold uppercase ring-1 ${styles}`}>{value}</span>;
+  return <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-bold uppercase ring-1 ${styles}`}>{label}</span>;
 }
 
 export function DataTable({ columns, rows }: { columns: string[]; rows: ReactNode[][] }) {
