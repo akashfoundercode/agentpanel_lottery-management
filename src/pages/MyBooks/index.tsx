@@ -65,11 +65,13 @@ export default function MyBooks() {
     const [reopenLoading, setReopenLoading] = useState<number | string | null>(null);
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     const fetchBooks = async () => {
         setLoading(true);
         setError('');
-        const [statusResult, profileResult] = await Promise.allSettled([api.get('/agent/books/status'), api.get('/agent/profile')]);
+        const [statusResult, profileResult] = await Promise.allSettled([api.get('/agent/books/status', { params: { search: search || undefined } }), api.get('/agent/profile')]);
         if (statusResult.status === 'fulfilled') {
             setBooks(getBooks(statusResult.value.data));
         } else {
@@ -88,9 +90,42 @@ export default function MyBooks() {
         fetchBooks();
         window.addEventListener('focus', fetchBooks);
         return () => window.removeEventListener('focus', fetchBooks);
-    }, []);
+    }, [search]);
 
     const agentId = agent?.id ?? agent?.agent_id;
+    const filterOptions = [
+        { label: 'All Books', value: 'all' },
+        { label: 'Assigned', value: 'assigned' },
+        { label: 'Sold', value: 'sold' },
+        { label: 'Unsold', value: 'unsold' },
+        { label: 'Unsold by Admin', value: 'unsold_by_admin' },
+    ];
+    const visibleBooks = statusFilter === 'all'
+        ? books
+        : books.filter((book) => book.status.toLowerCase() === statusFilter);
+    const exportBooks = () => {
+        const headers = ['No.', 'Book ID', 'Book Number', 'Status', 'Deadline', 'Locked', 'Game Status', 'Game Live At'];
+        const rows = visibleBooks.map((book, index) => [
+            index + 1,
+            book.book_id,
+            book.book_number,
+            book.status.toLowerCase() === 'unsold_by_admin' ? 'Unsold by Admin' : book.status,
+            formatDate(book.deadline_at),
+            book.is_locked ? 'Yes' : 'No',
+            book.game_status ?? '—',
+            formatDate(book.game_live_at),
+        ]);
+        const csv = [headers, ...rows]
+            .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+            .join('\r\n');
+        const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'my-books.csv';
+        link.click();
+        URL.revokeObjectURL(url);
+    };
 
     const handleConfirm = async () => {
         if (!confirm || agentId === undefined) return;
@@ -129,18 +164,19 @@ export default function MyBooks() {
 
     return <>
         {confirm && <ConfirmModal confirm={confirm} onClose={() => setConfirm(null)} onConfirm={handleConfirm} loading={actionLoading} />}
-        <PageToolbar title="My Books" subtitle="Review assigned book status and update eligible books." />
+        <PageToolbar title="My Books" subtitle="Review assigned book status and update eligible books." search="Search book" onSearch={setSearch} filterOptions={filterOptions} filterValue={statusFilter} onFilterChange={setStatusFilter} onExport={exportBooks} />
         {error && <ErrorBar message={error} />}
         {message && <div className="mb-3 rounded-md bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">{message}</div>}
         <MetricStrip items={[{ label: 'Total Books', value: String(books.length), tone: 'bg-blue-500' }, { label: 'Total Tickets', value: String(totalTickets), tone: 'bg-cyan-500' }, { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' }, { label: 'Unsold Books', value: String(unsoldBooks), tone: 'bg-orange-500' }]} />
         <Panel>
             {loading ? <PageLoader /> : <div className="overflow-x-auto">
                 <table className="w-full min-w-[1050px] text-left text-xs">
-                    <thead><tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">{['Book ID', 'Book Number', 'Status', 'Deadline', 'Locked', 'Game Status', 'Game Live At', 'Action'].map((column) => <th key={column} className="px-3 py-2">{column}</th>)}</tr></thead>
+                    <thead><tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">{['No.', 'Book ID', 'Book Number', 'Status', 'Deadline', 'Locked', 'Game Status', 'Game Live At', 'Action'].map((column) => <th key={column} className="px-3 py-2">{column}</th>)}</tr></thead>
                     <tbody className="divide-y divide-slate-100">
-                        {books.map((book) => {
+                        {visibleBooks.map((book, index) => {
                             const adminUnsold = book.status.toLowerCase() === 'unsold_by_admin';
                             return <tr key={book.book_id} className="text-slate-700 hover:bg-blue-50/40">
+                                <td className="whitespace-nowrap px-3 py-2.5 font-semibold">{index + 1}</td>
                                 <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
                                 <td className="whitespace-nowrap px-3 py-2.5 font-semibold">{book.book_number}</td>
                                 <td className="whitespace-nowrap px-3 py-2.5">{adminUnsold ? <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600"><LockKeyhole size={13} />Unsold by Admin</span> : <StatusBadge value={book.status} />}</td>
@@ -151,7 +187,7 @@ export default function MyBooks() {
                                 <td className="whitespace-nowrap px-3 py-2.5">{book.can_update_status ? <div className="flex gap-1.5"><button onClick={() => setConfirm({ book, type: 'sold' })} className="rounded-md bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-600">Sold</button><button onClick={() => setConfirm({ book, type: 'unsold' })} className="rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600">Unsold</button></div> : book.can_request_reopen ? <button onClick={() => requestReopen(book)} disabled={reopenLoading === book.book_id || agentId === undefined} className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-50 disabled:opacity-50"><RefreshCw size={13} className={reopenLoading === book.book_id ? 'animate-spin' : ''} />Request Reopen</button> : <span className="text-slate-400">No action</span>}</td>
                             </tr>;
                         })}
-                        {books.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>}
+                        {visibleBooks.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400">No books found.</td></tr>}
                     </tbody>
                 </table>
             </div>}

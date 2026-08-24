@@ -59,7 +59,7 @@ export default function MyGames() {
         { label: 'Total Games', value: String(games?.length ?? 0), tone: 'bg-blue-500' },
         { label: 'Active Games', value: String(activeCount), tone: 'bg-emerald-500' },
         { label: 'Total Books', value: totalBooks.toLocaleString('en-IN'), tone: 'bg-violet-500' },
-        { label: 'Total Tickets', value: totalTickets.toLocaleString('en-IN'), tone: 'bg-amber-400' },
+        { label: 'Total Tickets', value: (totalTickets * 10).toLocaleString('en-IN'), tone: 'bg-amber-400' },
       ]} />
       <Panel>
         {loading ? <PageLoader /> : <div className="overflow-x-auto">

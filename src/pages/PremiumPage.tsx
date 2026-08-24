@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { ArrowRight, Download, Filter, Search, Loader2, AlertCircle } from 'lucide-react';
 
 export function PageLoader() {
@@ -80,7 +80,9 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: ReactNod
   );
 }
 
-export function PageToolbar({ title, subtitle, search = 'Search records', onSearch }: { title: string; subtitle: string; search?: string; onSearch?: (v: string) => void }) {
+export function PageToolbar({ title, subtitle, search = 'Search records', onSearch, filterOptions, filterValue, onFilterChange, onExport }: { title: string; subtitle: string; search?: string; onSearch?: (v: string) => void; filterOptions?: Array<{ label: string; value: string }>; filterValue?: string; onFilterChange?: (value: string) => void; onExport?: () => void }) {
+  const [filterOpen, setFilterOpen] = useState(false);
+
   return (
     <div className="mb-3 flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
       <div>
@@ -93,11 +95,16 @@ export function PageToolbar({ title, subtitle, search = 'Search records', onSear
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 shadow-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 sm:w-52 lg:w-60" placeholder={search} onChange={(e) => onSearch?.(e.target.value)} />
         </label>
-        <button className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50">
-          <Filter size={15} />
-          Filter
-        </button>
-        <button className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700">
+        <div className="relative">
+          <button onClick={() => filterOptions && setFilterOpen((open) => !open)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50" aria-expanded={filterOpen}>
+            <Filter size={15} />
+            Filter
+          </button>
+          {filterOptions && filterOpen && <div className="absolute right-0 z-20 mt-2 w-48 rounded-md border border-slate-200 bg-white p-1.5 shadow-xl">
+            {filterOptions.map((option) => <button key={option.value} onClick={() => { onFilterChange?.(option.value); setFilterOpen(false); }} className={`block w-full rounded px-3 py-2 text-left text-xs font-semibold hover:bg-blue-50 ${filterValue === option.value ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}>{option.label}</button>)}
+          </div>}
+        </div>
+        <button onClick={onExport} disabled={!onExport} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
           <Download size={15} />
           Export
         </button>

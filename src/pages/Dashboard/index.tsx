@@ -84,7 +84,7 @@ export default function Dashboard() {
 
   const statCards = [
     { name: 'Total Books', value: stats?.total_books ?? '-', subtext: 'All Books', icon: BookCopy, color: 'blue', data: [10, 12, 9, 14, 10, 15, 11, 17, 12, 14] },
-    { name: 'Total Tickets', value: stats?.total_tickets ?? '-', subtext: 'All Tickets', icon: Ticket, color: 'emerald', data: [8, 10, 13, 9, 14, 10, 12, 16, 11, 13] },
+    { name: 'Total Tickets', value: stats?.total_tickets == null ? '-' : stats.total_tickets * 10, subtext: 'All Tickets', icon: Ticket, color: 'emerald', data: [8, 10, 13, 9, 14, 10, 12, 16, 11, 13] },
     { name: 'Assigned Games', value: totalGames || '-', subtext: 'Games Assigned', icon: Gamepad2, color: 'violet', data: [4, 5, 6, 4, 7, 5, 6, 8, 5, 7] },
     { name: 'Sold Books', value: stats?.sold_books ?? '-', subtext: 'Books Sold', icon: CheckCircle, color: 'cyan', data: [6, 8, 7, 12, 7, 11, 8, 13, 9, 12] },
     { name: 'Unsold Books', value: stats?.unsold_books ?? '-', subtext: 'Books Unsold', icon: XCircle, color: 'orange', data: [9, 10, 13, 8, 12, 7, 11, 15, 9, 12] },
@@ -95,58 +95,58 @@ export default function Dashboard() {
     <div className="space-y-3 lg:space-y-4">
       {error && <ErrorBar message={error} />}
       {loading ? <PageLoader /> : <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          const colors = colorMap[stat.color];
-          return (
-            <Panel key={stat.name} className="p-3">
-              <div className="flex items-start gap-2.5">
-                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${colors.icon}`}>
-                  <Icon size={18} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            const colors = colorMap[stat.color];
+            return (
+              <Panel key={stat.name} className="p-3">
+                <div className="flex items-start gap-2.5">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${colors.icon}`}>
+                    <Icon size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-700">{stat.name}</p>
+                    <p className="mt-0.5 text-xl font-black tracking-tight text-slate-950">{stat.value}</p>
+                    <p className="mt-0.5 text-xs font-medium text-slate-500">{stat.subtext}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-700">{stat.name}</p>
-                  <p className="mt-0.5 text-xl font-black tracking-tight text-slate-950">{stat.value}</p>
-                  <p className="mt-0.5 text-xs font-medium text-slate-500">{stat.subtext}</p>
-                </div>
-              </div>
-              <MiniSparkline values={stat.data} color={colors.line} />
-            </Panel>
-          );
-        })}
-      </div>
+                <MiniSparkline values={stat.data} color={colors.line} />
+              </Panel>
+            );
+          })}
+        </div>
 
-      <div className="grid gap-4">
-      <Panel className="p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-950">Sales Overview</h2>
-            <button className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
-              This Week
-              <ChevronDown size={14} />
-            </button>
-          </div>
-          <div className="h-52 sm:h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesTrend} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `₹${Number(value) / 1000}K`} tick={{ fill: '#64748b', fontSize: 11 }} width={42} />
-                <Tooltip formatter={(value) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Sales']} />
-                <Area type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={2.5} fill="url(#salesFill)" activeDot={{ r: 5 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-      </div>
-    </>
-    }
+        <div className="grid gap-4">
+          <Panel className="p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-950">Sales Overview</h2>
+              <button className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                This Week
+                <ChevronDown size={14} />
+              </button>
+            </div>
+            <div className="h-52 sm:h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={salesTrend} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `₹${Number(value) / 1000}K`} tick={{ fill: '#64748b', fontSize: 11 }} width={42} />
+                  <Tooltip formatter={(value) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Sales']} />
+                  <Area type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={2.5} fill="url(#salesFill)" activeDot={{ r: 5 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+        </div>
+      </>
+      }
     </div>
   );
 }
