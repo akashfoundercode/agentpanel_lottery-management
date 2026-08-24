@@ -67,14 +67,15 @@ export default function AssignmentHistory() {
           <table className="w-full min-w-[800px] text-left text-xs">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                {['Book ID', 'Game', 'Tickets', 'Assigned At', 'Sold At', 'Unsold At', 'Expiry', 'Status'].map((col) => (
+                {['S.No.', 'Book ID', 'Game', 'Tickets', 'Assigned At', 'Sold At', 'Unsold At', 'Expiry', 'Status'].map((col) => (
                   <th key={col} className="px-3 py-2">{col}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {books.map((book) => (
+              {books.map((book, index) => (
                 <tr key={book.id} className="text-slate-700 hover:bg-blue-50/40">
+                  <td className="whitespace-nowrap px-3 py-2.5 font-semibold">{index + 1}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-bold text-blue-600">{book.book_id}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">{book.game.game_name}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">{book.total_tickets}</td>
@@ -86,7 +87,7 @@ export default function AssignmentHistory() {
                 </tr>
               ))}
               {books.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No assignment history found.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400">No assignment history found.</td></tr>
               )}
             </tbody>
           </table>
