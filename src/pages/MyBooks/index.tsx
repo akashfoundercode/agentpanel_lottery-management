@@ -125,13 +125,14 @@ export default function MyBooks() {
 
     const soldBooks = books.filter((book) => book.status.toLowerCase() === 'sold').length;
     const unsoldBooks = books.filter((book) => book.status.toLowerCase().includes('unsold')).length;
+    const totalTickets = books.length * 10;
 
     return <>
         {confirm && <ConfirmModal confirm={confirm} onClose={() => setConfirm(null)} onConfirm={handleConfirm} loading={actionLoading} />}
         <PageToolbar title="My Books" subtitle="Review assigned book status and update eligible books." />
         {error && <ErrorBar message={error} />}
         {message && <div className="mb-3 rounded-md bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">{message}</div>}
-        <MetricStrip items={[{ label: 'Total Books', value: String(books.length), tone: 'bg-blue-500' }, { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' }, { label: 'Unsold Books', value: String(unsoldBooks), tone: 'bg-orange-500' }]} />
+        <MetricStrip items={[{ label: 'Total Books', value: String(books.length), tone: 'bg-blue-500' }, { label: 'Total Tickets', value: String(totalTickets), tone: 'bg-cyan-500' }, { label: 'Sold Books', value: String(soldBooks), tone: 'bg-emerald-500' }, { label: 'Unsold Books', value: String(unsoldBooks), tone: 'bg-orange-500' }]} />
         <Panel>
             {loading ? <PageLoader /> : <div className="overflow-x-auto">
                 <table className="w-full min-w-[1050px] text-left text-xs">
